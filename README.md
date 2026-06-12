@@ -12,14 +12,16 @@ También puedes publicarlo gratis con GitHub Pages (Settings → Pages → branc
 
 - **Precios en vivo**: CRO/USD, CRO/MXN y tipo de cambio USD/MXN, actualizados automáticamente cada 60 segundos
   (fuente principal: CoinGecko; respaldo: API pública del Exchange de Crypto.com + open.er-api.com).
-- **APY editable**: por defecto **5.24% anual** (la tasa actual de staking); cámbiala cuando Crypto.com la ajuste y se recalcula todo.
+- **Tasa editable**: por defecto **5.21% anual** (la "Est. APR" actual de la app); cámbiala cuando Crypto.com la ajuste y se recalcula todo.
+- **Tasa efectiva real**: la app de Crypto.com paga recompensas cada 2–3 días y la tasa realizada suele diferir de la anunciada.
+  Ingresa tus recompensas de un periodo (Rewards History) y calcula tu APR real, aplicable a toda la calculadora con un clic.
 - **Simulador de retorno**: ingresa un monto en USD, MXN o CRO y ve la ganancia en CRO/USD/MXN a 1 día,
   1 semana, 1 mes, 6 meses, 1, 2 y 5 años, con interés simple o compuesto (reinversión diaria).
 - **"¿Cuánto necesito para vivir de esto?"**: ingresa tu gasto mensual en MXN y te dice cuánto capital
   necesitas en staking (en CRO, USD y MXN), cuánto ya tienes y cuánto te falta.
-- **Registro de depósitos**: fecha, monto en USD, precio de CRO al comprar y CRO recibidos
-  (los dos últimos se autocompletan con el precio actual). Calcula valor actual, pérdida/ganancia,
-  costo promedio y **recompensas acumuladas estimadas** desde la fecha de cada depósito.
+- **Registro de depósitos**: fecha y monto **en CRO o en USD** (igual que el Supplying History de Crypto.com),
+  con precio de CRO opcional. Calcula valor actual, pérdida/ganancia, costo promedio y
+  **recompensas acumuladas estimadas** desde la fecha de cada depósito.
 - **Tus datos son tuyos**: todo se guarda en el `localStorage` de tu navegador. Exporta CSV o respaldo JSON
   e impórtalo en otro dispositivo. Nada se envía a ningún servidor.
 
