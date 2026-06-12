@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CRO Staking — Simulador de Intereses</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --card: #141b30;
+    --card2: #1a2340;
+    --border: #2a3558;
+    --text: #e8ecf8;
+    --muted: #93a0c4;
+    --accent: #1199fa;
+    --accent2: #03316c;
+    --green: #2ecc71;
+    --red: #ff5c6c;
+    --gold: #f0b90b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: linear-gradient(160deg, #0b1020 0%, #101a38 60%, #0b1020 100%);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 16px;
+  }
+  .container { max-width: 1100px; margin: 0 auto; }
+  header { text-align: center; margin: 12px 0 24px; }
+  header h1 { font-size: 1.7rem; letter-spacing: .5px; }
+  header h1 .cro { color: var(--accent); }
+  header p { color: var(--muted); font-size: .9rem; margin-top: 4px; }
+
+  .grid { display: grid; gap: 16px; }
+  .prices { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); margin-bottom: 16px; }
+  .price-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 14px 16px; text-align: center;
+  }
+  .price-card .label { color: var(--muted); font-size: .75rem; text-transform: uppercase; letter-spacing: 1px; }
+  .price-card .value { font-size: 1.35rem; font-weight: 700; margin-top: 4px; }
+  .price-card .sub { font-size: .78rem; margin-top: 2px; color: var(--muted); }
+  .up { color: var(--green); } .down { color: var(--red); }
+
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+    padding: 20px; margin-bottom: 16px;
+  }
+  .card h2 { font-size: 1.05rem; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+  .card h2 .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); display: inline-block; }
+
+  .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+  .field { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 140px; }
+  .field label { font-size: .75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  input, select {
+    background: var(--card2); border: 1px solid var(--border); color: var(--text);
+    border-radius: 10px; padding: 10px 12px; font-size: 1rem; width: 100%;
+  }
+  input:focus, select:focus { outline: none; border-color: var(--accent); }
+  button {
+    background: var(--accent); color: #fff; border: none; border-radius: 10px;
+    padding: 10px 18px; font-size: .95rem; font-weight: 600; cursor: pointer;
+    transition: opacity .15s;
+  }
+  button:hover { opacity: .88; }
+  button.secondary { background: var(--card2); border: 1px solid var(--border); color: var(--text); }
+  button.danger { background: transparent; border: 1px solid var(--red); color: var(--red); padding: 5px 10px; font-size: .8rem; }
+
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: .92rem; }
+  th, td { padding: 9px 10px; text-align: right; border-bottom: 1px solid var(--border); }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .5px; }
+  td.cro { color: var(--accent); font-weight: 600; }
+  td.mxn { color: var(--gold); }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 6px; }
+  .stat { background: var(--card2); border-radius: 12px; padding: 12px 14px; }
+  .stat .label { color: var(--muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .5px; }
+  .stat .value { font-size: 1.15rem; font-weight: 700; margin-top: 3px; }
+  .stat .sub { font-size: .78rem; color: var(--muted); margin-top: 2px; }
+
+  .highlight {
+    background: linear-gradient(135deg, var(--accent2), #103a7d);
+    border: 1px solid var(--accent); border-radius: 12px; padding: 16px; margin-top: 14px;
+    font-size: 1.05rem; line-height: 1.6;
+  }
+  .highlight strong { color: #7cc4ff; }
+  .note { color: var(--muted); font-size: .78rem; margin-top: 10px; line-height: 1.5; }
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .badge { font-size: .7rem; background: var(--card2); border: 1px solid var(--border); color: var(--muted);
+           border-radius: 20px; padding: 3px 10px; }
+  .table-wrap { overflow-x: auto; }
+  footer { text-align: center; color: var(--muted); font-size: .75rem; margin: 24px 0; line-height: 1.6; }
+  @media (max-width: 600px) { .price-card .value { font-size: 1.1rem; } }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>Simulador de Staking <span class="cro">CRO</span></h1>
+    <p>Transacciones en USD · Resultados en MXN · Precios actualizados al momento</p>
+  </header>
+
+  <!-- ══════════ PRECIOS EN VIVO ══════════ -->
+  <div class="grid prices">
+    <div class="price-card">
+      <div class="label">CRO / USD</div>
+      <div class="value" id="pxCroUsd">—</div>
+      <div class="sub" id="pxCroChange">—</div>
+    </div>
+    <div class="price-card">
+      <div class="label">CRO / MXN</div>
+      <div class="value" id="pxCroMxn">—</div>
+      <div class="sub">precio en pesos</div>
+    </div>
+    <div class="price-card">
+      <div class="label">USD / MXN</div>
+      <div class="value" id="pxUsdMxn">—</div>
+      <div class="sub">tipo de cambio</div>
+    </div>
+    <div class="price-card">
+      <div class="label">APY Staking</div>
+      <div class="value"><input id="apy" type="number" step="0.01" min="0" value="5.24"
+        style="width:90px;text-align:center;font-size:1.2rem;font-weight:700;padding:4px 6px;display:inline-block">%</div>
+      <div class="sub">editable — tasa anual</div>
+    </div>
+  </div>
+  <div style="text-align:center;margin-bottom:18px;">
+    <button class="secondary" id="btnRefresh">↻ Actualizar precios</button>
+    <span class="badge" id="lastUpdate">sin datos</span>
+  </div>
+
+  <!-- ══════════ MI PORTAFOLIO ══════════ -->
+  <div class="card">
+    <h2><span class="dot"></span>Mi portafolio en staking</h2>
+    <div class="stats" id="portfolioStats"></div>
+    <div class="highlight" id="portfolioIncome" style="display:none"></div>
+    <p class="note">El balance se calcula con tus depósitos registrados abajo. Las recompensas acumuladas se estiman
+    desde la fecha de cada depósito con la tasa APY actual (estimación — la tasa real puede haber variado).</p>
+  </div>
+
+  <!-- ══════════ SIMULADOR ══════════ -->
+  <div class="card">
+    <h2><span class="dot"></span>Simulador: ¿cuánto me retorna?</h2>
+    <div class="row">
+      <div class="field">
+        <label>Monto a depositar</label>
+        <input id="simAmount" type="number" min="0" step="any" placeholder="1000">
+      </div>
+      <div class="field" style="max-width:130px">
+        <label>Moneda</label>
+        <select id="simCurrency">
+          <option value="USD">USD</option>
+          <option value="MXN">MXN</option>
+          <option value="CRO">CRO</option>
+        </select>
+      </div>
+      <div class="field" style="max-width:190px">
+        <label>Interés compuesto</label>
+        <select id="simCompound">
+          <option value="1">Sí (reinvertir diario)</option>
+          <option value="0">No (interés simple)</option>
+        </select>
+      </div>
+      <button id="btnSim">Calcular</button>
+    </div>
+    <div id="simResult"></div>
+  </div>
+
+  <!-- ══════════ VIVIR DEL STAKING ══════════ -->
+  <div class="card">
+    <h2><span class="dot"></span>¿Cuánto necesito para vivir de esto?</h2>
+    <div class="row">
+      <div class="field">
+        <label>Gasto mensual que quiero cubrir (MXN)</label>
+        <input id="liveAmount" type="number" min="0" step="any" placeholder="25000">
+      </div>
+      <button id="btnLive">Calcular</button>
+    </div>
+    <div id="liveResult"></div>
+  </div>
+
+  <!-- ══════════ TRANSACCIONES ══════════ -->
+  <div class="card">
+    <h2><span class="dot"></span>Mis depósitos / transacciones</h2>
+    <div class="row">
+      <div class="field" style="max-width:170px">
+        <label>Fecha</label>
+        <input id="txDate" type="date">
+      </div>
+      <div class="field">
+        <label>Monto (USD)</label>
+        <input id="txUsd" type="number" min="0" step="any" placeholder="500">
+      </div>
+      <div class="field">
+        <label>Precio CRO al comprar (USD)</label>
+        <input id="txPrice" type="number" min="0" step="any" placeholder="auto: precio actual">
+      </div>
+      <div class="field">
+        <label>CRO recibidos</label>
+        <input id="txCro" type="number" min="0" step="any" placeholder="auto: monto ÷ precio">
+      </div>
+      <button id="btnAddTx">+ Registrar</button>
+    </div>
+    <div class="table-wrap">
+      <table id="txTable" style="display:none">
+        <thead>
+          <tr><th>Fecha</th><th>USD</th><th>Precio CRO</th><th>CRO</th><th>Valor hoy (USD)</th><th>Valor hoy (MXN)</th><th>P/G</th><th></th></tr>
+        </thead>
+        <tbody id="txBody"></tbody>
+      </table>
+    </div>
+    <div class="toolbar">
+      <button class="secondary" id="btnExport">⬇ Exportar CSV</button>
+      <button class="secondary" id="btnExportJson">⬇ Respaldo JSON</button>
+      <button class="secondary" id="btnImportJson">⬆ Importar JSON</button>
+      <input type="file" id="fileImport" accept=".json" style="display:none">
+    </div>
+    <p class="note">Los datos se guardan localmente en tu navegador (localStorage). Usa el respaldo JSON para
+    moverlos a otro dispositivo. Nada se envía a ningún servidor.</p>
+  </div>
+
+  <footer>
+    Precios: CoinGecko (con respaldo de Crypto.com Exchange + tipo de cambio de open.er-api.com), actualización automática cada 60&nbsp;s.<br>
+    Esto es una herramienta de estimación, no asesoría financiera. La tasa de staking de Crypto.com cambia según tu nivel de tarjeta y condiciones de mercado.
+  </footer>
+</div>
+
+<script>
+"use strict";
+
+/* ───────────────────────── Estado ───────────────────────── */
+const state = {
+  croUsd: null,       // precio CRO en USD
+  croMxn: null,       // precio CRO en MXN
+  usdMxn: null,       // tipo de cambio USD→MXN
+  change24h: null,    // cambio 24h de CRO en %
+  lastUpdate: null,
+  txs: []             // { id, date: 'YYYY-MM-DD', usd, price, cro }
+};
+
+const LS_TX = "cro_calc_txs";
+const LS_APY = "cro_calc_apy";
+
+const $ = (id) => document.getElementById(id);
+
+function apy() {
+  const v = parseFloat($("apy").value);
+  return (isFinite(v) && v >= 0) ? v / 100 : 0;
+}
+
+/* ─────────────────────── Formateo ─────────────────────── */
+const fmtUsd = (v) => v == null ? "—" : v.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
+const fmtMxn = (v) => v == null ? "—" : "$" + v.toLocaleString("es-MX", { maximumFractionDigits: 2, minimumFractionDigits: 2 }) + " MXN";
+const fmtCro = (v) => v == null ? "—" : v.toLocaleString("en-US", { maximumFractionDigits: 4 }) + " CRO";
+const fmtPx  = (v, d = 4) => v == null ? "—" : v.toLocaleString("en-US", { maximumFractionDigits: d, minimumFractionDigits: 2 });
+
+/* ─────────────────── Precios en vivo ─────────────────── */
+async function fetchCoinGecko() {
+  const url = "https://api.coingecko.com/api/v3/simple/price?ids=crypto-com-chain&vs_currencies=usd,mxn&include_24hr_change=true";
+  const r = await fetch(url);
+  if (!r.ok) throw new Error("CoinGecko HTTP " + r.status);
+  const j = await r.json();
+  const d = j["crypto-com-chain"];
+  if (!d || !d.usd || !d.mxn) throw new Error("CoinGecko sin datos");
+  state.croUsd = d.usd;
+  state.croMxn = d.mxn;
+  state.usdMxn = d.mxn / d.usd;
+  state.change24h = d.usd_24h_change ?? null;
+}
+
+async function fetchFallback() {
+  // Ticker público del Exchange de Crypto.com + tipo de cambio de open.er-api.com
+  const [r1, r2] = await Promise.all([
+    fetch("https://api.crypto.com/exchange/v1/public/get-tickers?instrument_name=CRO_USD"),
+    fetch("https://open.er-api.com/v6/latest/USD")
+  ]);
+  if (!r1.ok || !r2.ok) throw new Error("Fallback HTTP error");
+  const j1 = await r1.json();
+  const j2 = await r2.json();
+  const tick = j1?.result?.data?.[0];
+  const mxn = j2?.rates?.MXN;
+  if (!tick || !mxn) throw new Error("Fallback sin datos");
+  state.croUsd = parseFloat(tick.a); // último precio
+  state.usdMxn = mxn;
+  state.croMxn = state.croUsd * mxn;
+  state.change24h = tick.c != null ? parseFloat(tick.c) * 100 : null;
+}
+
+async function refreshPrices() {
+  $("btnRefresh").disabled = true;
+  try {
+    try { await fetchCoinGecko(); }
+    catch (e) { console.warn("CoinGecko falló, usando fallback:", e); await fetchFallback(); }
+    state.lastUpdate = new Date();
+    renderPrices();
+    renderPortfolio();
+    renderTxs();
+    // recalcular simuladores si ya tenían resultados
+    if ($("simResult").innerHTML) runSimulator();
+    if ($("liveResult").innerHTML) runLiveCalc();
+  } catch (e) {
+    console.error(e);
+    $("lastUpdate").textContent = "⚠ error al obtener precios — reintenta";
+  } finally {
+    $("btnRefresh").disabled = false;
+  }
+}
+
+function renderPrices() {
+  $("pxCroUsd").textContent = "$" + fmtPx(state.croUsd);
+  $("pxCroMxn").textContent = "$" + fmtPx(state.croMxn);
+  $("pxUsdMxn").textContent = "$" + fmtPx(state.usdMxn, 2);
+  const ch = state.change24h;
+  const el = $("pxCroChange");
+  if (ch == null) { el.textContent = "—"; el.className = "sub"; }
+  else {
+    el.textContent = (ch >= 0 ? "▲ +" : "▼ ") + ch.toFixed(2) + "% (24h)";
+    el.className = "sub " + (ch >= 0 ? "up" : "down");
+  }
+  $("lastUpdate").textContent = "actualizado: " + state.lastUpdate.toLocaleTimeString("es-MX");
+}
+
+/* ─────────────────── Transacciones ─────────────────── */
+function loadTxs() {
+  try { state.txs = JSON.parse(localStorage.getItem(LS_TX)) || []; }
+  catch { state.txs = []; }
+}
+function saveTxs() {
+  localStorage.setItem(LS_TX, JSON.stringify(state.txs));
+}
+
+function addTx() {
+  const date = $("txDate").value || new Date().toISOString().slice(0, 10);
+  const usd = parseFloat($("txUsd").value);
+  let price = parseFloat($("txPrice").value);
+  let cro = parseFloat($("txCro").value);
+
+  if (!isFinite(usd) || usd <= 0) { alert("Ingresa el monto del depósito en USD."); return; }
+  if (!isFinite(price) || price <= 0) {
+    if (state.croUsd) price = state.croUsd;
+    else { alert("Sin precio disponible: ingresa el precio de CRO o actualiza precios."); return; }
+  }
+  if (!isFinite(cro) || cro <= 0) cro = usd / price;
+
+  state.txs.push({ id: Date.now(), date, usd, price, cro });
+  state.txs.sort((a, b) => a.date.localeCompare(b.date));
+  saveTxs();
+  $("txUsd").value = ""; $("txPrice").value = ""; $("txCro").value = "";
+  renderTxs();
+  renderPortfolio();
+}
+
+function deleteTx(id) {
+  state.txs = state.txs.filter(t => t.id !== id);
+  saveTxs();
+  renderTxs();
+  renderPortfolio();
+}
+
+function daysSince(dateStr) {
+  const ms = Date.now() - new Date(dateStr + "T00:00:00").getTime();
+  return Math.max(0, ms / 86400000);
+}
+
+function renderTxs() {
+  const tbl = $("txTable"), body = $("txBody");
+  if (!state.txs.length) { tbl.style.display = "none"; return; }
+  tbl.style.display = "";
+  body.innerHTML = "";
+  for (const t of state.txs) {
+    const valUsd = state.croUsd ? t.cro * state.croUsd : null;
+    const valMxn = state.croMxn ? t.cro * state.croMxn : null;
+    const pg = valUsd != null ? valUsd - t.usd : null;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${t.date}</td>
+      <td>${fmtUsd(t.usd)}</td>
+      <td>$${fmtPx(t.price)}</td>
+      <td class="cro">${fmtCro(t.cro)}</td>
+      <td>${fmtUsd(valUsd)}</td>
+      <td class="mxn">${fmtMxn(valMxn)}</td>
+      <td class="${pg == null ? "" : pg >= 0 ? "up" : "down"}">${pg == null ? "—" : (pg >= 0 ? "+" : "") + fmtUsd(pg)}</td>
+      <td><button class="danger" data-del="${t.id}">✕</button></td>`;
+    body.appendChild(tr);
+  }
+  body.querySelectorAll("[data-del]").forEach(b =>
+    b.addEventListener("click", () => {
+      if (confirm("¿Eliminar esta transacción?")) deleteTx(Number(b.dataset.del));
+    })
+  );
+}
+
+/* ─────────────────── Portafolio ─────────────────── */
+function renderPortfolio() {
+  const wrap = $("portfolioStats");
+  const totalCro = state.txs.reduce((s, t) => s + t.cro, 0);
+  const totalUsd = state.txs.reduce((s, t) => s + t.usd, 0);
+
+  // recompensas acumuladas estimadas (simple, desde la fecha de cada depósito)
+  const dailyRate = apy() / 365;
+  const accruedCro = state.txs.reduce((s, t) => s + t.cro * dailyRate * daysSince(t.date), 0);
+  const balCro = totalCro + accruedCro;
+
+  const valUsd = state.croUsd ? balCro * state.croUsd : null;
+  const valMxn = state.croMxn ? balCro * state.croMxn : null;
+  const avgCost = totalCro > 0 ? totalUsd / totalCro : null;
+
+  if (!state.txs.length) {
+    wrap.innerHTML = `<div class="stat"><div class="label">Sin depósitos</div>
+      <div class="value">0 CRO</div><div class="sub">registra tus depósitos abajo para ver tu balance</div></div>`;
+    $("portfolioIncome").style.display = "none";
+    return;
+  }
+
+  wrap.innerHTML = `
+    <div class="stat"><div class="label">CRO en staking</div><div class="value">${fmtCro(totalCro)}</div>
+      <div class="sub">invertido: ${fmtUsd(totalUsd)}</div></div>
+    <div class="stat"><div class="label">Recompensas acumuladas (est.)</div><div class="value">+${fmtCro(accruedCro)}</div>
+      <div class="sub">${state.croUsd ? "≈ " + fmtUsd(accruedCro * state.croUsd) : ""}</div></div>
+    <div class="stat"><div class="label">Balance total estimado</div><div class="value">${fmtCro(balCro)}</div>
+      <div class="sub">costo promedio: ${avgCost ? "$" + fmtPx(avgCost) : "—"}</div></div>
+    <div class="stat"><div class="label">Valor hoy</div><div class="value">${fmtUsd(valUsd)}</div>
+      <div class="sub">${fmtMxn(valMxn)}</div></div>`;
+
+  const inc = $("portfolioIncome");
+  if (state.croUsd && balCro > 0) {
+    const yCro = balCro * apy();
+    inc.style.display = "";
+    inc.innerHTML = `Con tu balance actual y APY de <strong>${(apy() * 100).toFixed(2)}%</strong> generas aprox.
+      <strong>${fmtCro(yCro / 365)}</strong> al día
+      (≈ ${fmtUsd(yCro / 365 * state.croUsd)} / <strong>${fmtMxn(yCro / 365 * state.croMxn)}</strong>),
+      <strong>${fmtCro(yCro / 12)}</strong> al mes
+      (≈ ${fmtUsd(yCro / 12 * state.croUsd)} / <strong>${fmtMxn(yCro / 12 * state.croMxn)}</strong>) y
+      <strong>${fmtCro(yCro)}</strong> al año
+      (≈ ${fmtUsd(yCro * state.croUsd)} / <strong>${fmtMxn(yCro * state.croMxn)}</strong>).`;
+  } else {
+    inc.style.display = "none";
+  }
+}
+
+/* ─────────────────── Simulador ─────────────────── */
+function runSimulator() {
+  const amt = parseFloat($("simAmount").value);
+  const cur = $("simCurrency").value;
+  const compound = $("simCompound").value === "1";
+  const out = $("simResult");
+
+  if (!isFinite(amt) || amt <= 0) { out.innerHTML = ""; return; }
+  if (!state.croUsd) { out.innerHTML = `<p class="note">⚠ Esperando precios… pulsa "Actualizar precios".</p>`; return; }
+
+  let usd;
+  if (cur === "USD") usd = amt;
+  else if (cur === "MXN") usd = amt / state.usdMxn;
+  else usd = amt * state.croUsd;
+  const cro0 = usd / state.croUsd;
+
+  const r = apy();
+  const periods = [
+    ["1 día", 1], ["1 semana", 7], ["1 mes", 30.44],
+    ["6 meses", 182.6], ["1 año", 365], ["2 años", 730], ["5 años", 1825]
+  ];
+
+  let rows = "";
+  for (const [name, days] of periods) {
+    const gain = compound
+      ? cro0 * (Math.pow(1 + r / 365, days) - 1)
+      : cro0 * r / 365 * days;
+    const total = cro0 + gain;
+    rows += `<tr>
+      <td>${name}</td>
+      <td class="cro">+${fmtCro(gain)}</td>
+      <td>${fmtUsd(gain * state.croUsd)}</td>
+      <td class="mxn">${fmtMxn(gain * state.croMxn)}</td>
+      <td>${fmtCro(total)}</td>
+      <td>${fmtUsd(total * state.croUsd)}</td>
+      <td class="mxn">${fmtMxn(total * state.croMxn)}</td>
+    </tr>`;
+  }
+
+  out.innerHTML = `
+    <div class="highlight">Depositas <strong>${fmtUsd(usd)}</strong> (${fmtMxn(usd * state.usdMxn)}) →
+      recibes <strong>${fmtCro(cro0)}</strong> al precio actual de $${fmtPx(state.croUsd)} USD,
+      con APY de <strong>${(r * 100).toFixed(2)}%</strong>
+      ${compound ? "reinvirtiendo diario (compuesto)" : "con interés simple"}.</div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Plazo</th><th>Ganancia CRO</th><th>Ganancia USD</th><th>Ganancia MXN</th>
+        <th>Total CRO</th><th>Total USD</th><th>Total MXN</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>
+    <p class="note">Las recompensas de staking se pagan en CRO; el valor en USD/MXN asume el precio actual constante
+    (el precio de CRO y el tipo de cambio varían).</p>`;
+}
+
+/* ─────────────── Vivir del staking ─────────────── */
+function runLiveCalc() {
+  const mxnMonthly = parseFloat($("liveAmount").value);
+  const out = $("liveResult");
+  if (!isFinite(mxnMonthly) || mxnMonthly <= 0) { out.innerHTML = ""; return; }
+  if (!state.croUsd) { out.innerHTML = `<p class="note">⚠ Esperando precios… pulsa "Actualizar precios".</p>`; return; }
+
+  const r = apy();
+  if (r <= 0) { out.innerHTML = `<p class="note">⚠ Pon un APY mayor a 0.</p>`; return; }
+
+  const usdMonthly = mxnMonthly / state.usdMxn;
+  const usdNeeded = usdMonthly * 12 / r;          // capital que genera ese ingreso mensual
+  const croNeeded = usdNeeded / state.croUsd;
+  const mxnNeeded = usdNeeded * state.usdMxn;
+
+  // ¿qué tanto te falta según tu portafolio actual?
+  const totalCro = state.txs.reduce((s, t) => s + t.cro, 0);
+  const haveUsd = totalCro * state.croUsd;
+  const pct = usdNeeded > 0 ? Math.min(100, haveUsd / usdNeeded * 100) : 0;
+  const missingUsd = Math.max(0, usdNeeded - haveUsd);
+
+  out.innerHTML = `
+    <div class="highlight">Para generar <strong>${fmtMxn(mxnMonthly)}</strong> al mes
+      (≈ ${fmtUsd(usdMonthly)}) con APY de <strong>${(r * 100).toFixed(2)}%</strong> necesitas tener en staking:
+      <br>≈ <strong>${fmtCro(croNeeded)}</strong> = <strong>${fmtUsd(usdNeeded)}</strong> = <strong>${fmtMxn(mxnNeeded)}</strong></div>
+    <div class="stats">
+      <div class="stat"><div class="label">Ya tienes</div><div class="value">${fmtUsd(haveUsd)}</div>
+        <div class="sub">${fmtCro(totalCro)} — ${pct.toFixed(1)}% de la meta</div></div>
+      <div class="stat"><div class="label">Te falta</div><div class="value">${fmtUsd(missingUsd)}</div>
+        <div class="sub">${fmtMxn(missingUsd * state.usdMxn)}</div></div>
+      <div class="stat"><div class="label">Equivalente diario</div><div class="value">${fmtMxn(mxnMonthly * 12 / 365)}</div>
+        <div class="sub">ingreso por día</div></div>
+    </div>
+    <p class="note">Cálculo: capital = gasto anual ÷ APY. No considera impuestos, inflación ni variación del precio
+    de CRO — si el precio baja, tu ingreso en pesos baja igual. Considera un margen de seguridad.</p>`;
+}
+
+/* ─────────────── Exportar / Importar ─────────────── */
+function download(filename, content, mime) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([content], { type: mime }));
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function exportCsv() {
+  if (!state.txs.length) { alert("No hay transacciones."); return; }
+  let csv = "fecha,usd,precio_cro_usd,cro\n";
+  for (const t of state.txs) csv += `${t.date},${t.usd},${t.price},${t.cro}\n`;
+  download("cro_transacciones.csv", csv, "text/csv");
+}
+
+function exportJson() {
+  download("cro_calc_respaldo.json", JSON.stringify({ apy: $("apy").value, txs: state.txs }, null, 2), "application/json");
+}
+
+function importJson(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const j = JSON.parse(reader.result);
+      if (!Array.isArray(j.txs)) throw new Error("formato inválido");
+      state.txs = j.txs.filter(t => t.date && isFinite(t.usd) && isFinite(t.cro));
+      if (j.apy) { $("apy").value = j.apy; localStorage.setItem(LS_APY, j.apy); }
+      saveTxs();
+      renderTxs();
+      renderPortfolio();
+      alert("Respaldo importado: " + state.txs.length + " transacciones.");
+    } catch (e) {
+      alert("No se pudo importar: " + e.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+/* ─────────────────── Init ─────────────────── */
+function init() {
+  loadTxs();
+  const savedApy = localStorage.getItem(LS_APY);
+  if (savedApy) $("apy").value = savedApy;
+  $("txDate").value = new Date().toISOString().slice(0, 10);
+
+  $("btnRefresh").addEventListener("click", refreshPrices);
+  $("btnSim").addEventListener("click", runSimulator);
+  $("simAmount").addEventListener("keydown", e => { if (e.key === "Enter") runSimulator(); });
+  $("btnLive").addEventListener("click", runLiveCalc);
+  $("liveAmount").addEventListener("keydown", e => { if (e.key === "Enter") runLiveCalc(); });
+  $("btnAddTx").addEventListener("click", addTx);
+  $("btnExport").addEventListener("click", exportCsv);
+  $("btnExportJson").addEventListener("click", exportJson);
+  $("btnImportJson").addEventListener("click", () => $("fileImport").click());
+  $("fileImport").addEventListener("change", e => {
+    if (e.target.files[0]) importJson(e.target.files[0]);
+    e.target.value = "";
+  });
+  $("apy").addEventListener("change", () => {
+    localStorage.setItem(LS_APY, $("apy").value);
+    renderPortfolio();
+    if ($("simResult").innerHTML) runSimulator();
+    if ($("liveResult").innerHTML) runLiveCalc();
+  });
+
+  renderTxs();
+  renderPortfolio();
+  refreshPrices();
+  setInterval(refreshPrices, 60000); // actualización automática cada 60 s
+}
+
+init();
+</script>
+</body>
+</html>
