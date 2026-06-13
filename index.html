@@ -118,7 +118,7 @@
     <div class="price-card">
       <div class="label">USD / MXN</div>
       <div class="value" id="pxUsdMxn">—</div>
-      <div class="sub">tipo de cambio</div>
+      <div class="sub" id="pxFxSource">tipo de cambio</div>
     </div>
     <div class="price-card">
       <div class="label">APY Staking</div>
@@ -251,7 +251,7 @@
   </div>
 
   <footer>
-    Precios: CoinGecko (con respaldo de Crypto.com Exchange + tipo de cambio de open.er-api.com), actualización automática cada 60&nbsp;s.<br>
+    Precio de CRO: CoinGecko (respaldo: Exchange de Crypto.com). Tipo de cambio USD/MXN: Binance (USDT/MXN), con respaldo de open.er-api / Coinbase / Frankfurter. Actualización automática cada 60&nbsp;s.<br>
     Esto es una herramienta de estimación, no asesoría financiera. La tasa de staking de Crypto.com cambia según tu nivel de tarjeta y condiciones de mercado.
   </footer>
 </div>
@@ -264,6 +264,7 @@ const state = {
   croUsd: null,       // precio CRO en USD
   croMxn: null,       // precio CRO en MXN
   usdMxn: null,       // tipo de cambio USD→MXN
+  fxSource: null,     // fuente del tipo de cambio (Binance, etc.)
   change24h: null,    // cambio 24h de CRO en %
   lastUpdate: null,
   txs: []             // { id, date: 'YYYY-MM-DD', usd, price, cro }
@@ -286,42 +287,72 @@ const fmtCro = (v) => v == null ? "—" : v.toLocaleString("en-US", { maximumFra
 const fmtPx  = (v, d = 4) => v == null ? "—" : v.toLocaleString("en-US", { maximumFractionDigits: d, minimumFractionDigits: 2 });
 
 /* ─────────────────── Precios en vivo ─────────────────── */
-async function fetchCoinGecko() {
-  const url = "https://api.coingecko.com/api/v3/simple/price?ids=crypto-com-chain&vs_currencies=usd,mxn&include_24hr_change=true";
-  const r = await fetch(url);
-  if (!r.ok) throw new Error("CoinGecko HTTP " + r.status);
-  const j = await r.json();
-  const d = j["crypto-com-chain"];
-  if (!d || !d.usd || !d.mxn) throw new Error("CoinGecko sin datos");
-  state.croUsd = d.usd;
-  state.croMxn = d.mxn;
-  state.usdMxn = d.mxn / d.usd;
-  state.change24h = d.usd_24h_change ?? null;
+
+// 1) Precio de CRO en USD (+ cambio 24h). CoinGecko principal, Exchange de Crypto.com de respaldo.
+async function fetchCroUsd() {
+  try {
+    const r = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=crypto-com-chain&vs_currencies=usd&include_24hr_change=true");
+    if (!r.ok) throw new Error("CoinGecko HTTP " + r.status);
+    const d = (await r.json())["crypto-com-chain"];
+    if (!d || !d.usd) throw new Error("CoinGecko sin datos");
+    return { usd: d.usd, change: d.usd_24h_change ?? null };
+  } catch (e) {
+    console.warn("CoinGecko falló, usando Crypto.com Exchange:", e);
+    const r = await fetch("https://api.crypto.com/exchange/v1/public/get-tickers?instrument_name=CRO_USD");
+    if (!r.ok) throw new Error("Crypto.com HTTP " + r.status);
+    const tick = (await r.json())?.result?.data?.[0];
+    if (!tick || tick.a == null) throw new Error("Crypto.com sin datos");
+    return { usd: parseFloat(tick.a), change: tick.c != null ? parseFloat(tick.c) * 100 : null };
+  }
 }
 
-async function fetchFallback() {
-  // Ticker público del Exchange de Crypto.com + tipo de cambio de open.er-api.com
-  const [r1, r2] = await Promise.all([
-    fetch("https://api.crypto.com/exchange/v1/public/get-tickers?instrument_name=CRO_USD"),
-    fetch("https://open.er-api.com/v6/latest/USD")
-  ]);
-  if (!r1.ok || !r2.ok) throw new Error("Fallback HTTP error");
-  const j1 = await r1.json();
-  const j2 = await r2.json();
-  const tick = j1?.result?.data?.[0];
-  const mxn = j2?.rates?.MXN;
-  if (!tick || !mxn) throw new Error("Fallback sin datos");
-  state.croUsd = parseFloat(tick.a); // último precio
-  state.usdMxn = mxn;
-  state.croMxn = state.croUsd * mxn;
-  state.change24h = tick.c != null ? parseFloat(tick.c) * 100 : null;
+// 2) Tipo de cambio USD→MXN de fuentes de DIVISAS reales (no derivado de cripto).
+//    Se prueban en orden hasta que una responda; así el dólar coincide con el spot.
+const FX_SOURCES = [
+  // Binance primero: USDT≈USD, así el dólar refleja lo que pagas comprando USDT con pesos.
+  // Ticker spot (CORS abierto); si el par no existe para el navegador, cae a las siguientes.
+  { name: "Binance (USDT/MXN)", url: "https://api.binance.com/api/v3/ticker/price?symbol=USDTMXN", pick: (j) => parseFloat(j?.price) },
+  // Promedio del P2P de Binance (lo que cuesta comprar USDT). Endpoint POST; puede fallar por CORS.
+  { name: "Binance P2P", method: "POST",
+    url: "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search",
+    body: { asset: "USDT", fiat: "MXN", tradeType: "BUY", page: 1, rows: 5, payTypes: [] },
+    pick: (j) => {
+      const ads = j?.data;
+      if (!Array.isArray(ads) || !ads.length) return NaN;
+      const prices = ads.map((a) => parseFloat(a?.adv?.price)).filter((p) => isFinite(p)).sort((a, b) => a - b);
+      return prices.length ? prices[Math.floor(prices.length / 2)] : NaN; // mediana
+    } },
+  { name: "open.er-api", url: "https://open.er-api.com/v6/latest/USD", pick: (j) => j?.rates?.MXN },
+  { name: "Coinbase",    url: "https://api.coinbase.com/v2/exchange-rates?currency=USD", pick: (j) => parseFloat(j?.data?.rates?.MXN) },
+  { name: "Frankfurter", url: "https://api.frankfurter.dev/v1/latest?base=USD&symbols=MXN", pick: (j) => j?.rates?.MXN }
+];
+
+async function fetchUsdMxn() {
+  for (const src of FX_SOURCES) {
+    try {
+      const opts = src.method === "POST"
+        ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(src.body) }
+        : undefined;
+      const r = await fetch(src.url, opts);
+      if (!r.ok) continue;
+      const mxn = src.pick(await r.json());
+      if (isFinite(mxn) && mxn > 0) return { rate: mxn, source: src.name };
+    } catch (e) {
+      console.warn("FX " + src.name + " falló:", e);
+    }
+  }
+  throw new Error("Ninguna fuente de tipo de cambio respondió");
 }
 
 async function refreshPrices() {
   $("btnRefresh").disabled = true;
   try {
-    try { await fetchCoinGecko(); }
-    catch (e) { console.warn("CoinGecko falló, usando fallback:", e); await fetchFallback(); }
+    const [cro, fx] = await Promise.all([fetchCroUsd(), fetchUsdMxn()]);
+    state.croUsd = cro.usd;
+    state.change24h = cro.change;
+    state.usdMxn = fx.rate;
+    state.fxSource = fx.source;
+    state.croMxn = cro.usd * fx.rate; // peso = precio en dólares × tipo de cambio real
     state.lastUpdate = new Date();
     renderPrices();
     renderPortfolio();
@@ -341,6 +372,7 @@ function renderPrices() {
   $("pxCroUsd").textContent = "$" + fmtPx(state.croUsd);
   $("pxCroMxn").textContent = "$" + fmtPx(state.croMxn);
   $("pxUsdMxn").textContent = "$" + fmtPx(state.usdMxn, 2);
+  $("pxFxSource").textContent = state.fxSource ? "fuente: " + state.fxSource : "tipo de cambio";
   const ch = state.change24h;
   const el = $("pxCroChange");
   if (ch == null) { el.textContent = "—"; el.className = "sub"; }
