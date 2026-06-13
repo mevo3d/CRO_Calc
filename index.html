@@ -250,6 +250,38 @@
     moverlos a otro dispositivo. Nada se envía a ningún servidor.</p>
   </div>
 
+  <!-- ══════════ RECOMPENSAS REALES ══════════ -->
+  <div class="card">
+    <h2><span class="dot"></span>Recompensas reales recibidas</h2>
+    <div class="row">
+      <div class="field" style="max-width:170px">
+        <label>Fecha</label>
+        <input id="rwDate" type="date">
+      </div>
+      <div class="field">
+        <label>Recompensa (CRO)</label>
+        <input id="rwCro" type="number" min="0" step="any" placeholder="14.18974160">
+      </div>
+      <div class="field" style="max-width:180px">
+        <label>Origen (opcional)</label>
+        <input id="rwNote" type="text" placeholder="Exchange / App">
+      </div>
+      <button id="btnAddRw">+ Registrar</button>
+    </div>
+    <div class="table-wrap">
+      <table id="rwTable" style="display:none">
+        <thead>
+          <tr><th>Fecha</th><th>Origen</th><th>CRO</th><th>Valor hoy (USD)</th><th>Valor hoy (MXN)</th><th></th></tr>
+        </thead>
+        <tbody id="rwBody"></tbody>
+        <tfoot id="rwFoot"></tfoot>
+      </table>
+    </div>
+    <p class="note">Aquí registras las recompensas que <b>realmente</b> te pagó Crypto.com (pestaña Rewards History
+    del Exchange y Staking Rewards de la App). Cuando hay recompensas reales, tu balance y tu rédito usan estas
+    cifras en vez de la estimación. Lo que se ve en tus capturas ya viene precargado al importar tu respaldo.</p>
+  </div>
+
   <footer>
     Precio de CRO: CoinGecko (respaldo: Exchange de Crypto.com). Tipo de cambio USD/MXN: Binance (USDT/MXN), con respaldo de open.er-api / Coinbase / Frankfurter. Actualización automática cada 60&nbsp;s.<br>
     Esto es una herramienta de estimación, no asesoría financiera. La tasa de staking de Crypto.com cambia según tu nivel de tarjeta y condiciones de mercado.
@@ -267,11 +299,13 @@ const state = {
   fxSource: null,     // fuente del tipo de cambio (Binance, etc.)
   change24h: null,    // cambio 24h de CRO en %
   lastUpdate: null,
-  txs: []             // { id, date: 'YYYY-MM-DD', usd, price, cro }
+  txs: [],            // { id, date: 'YYYY-MM-DD', usd, price, cro }
+  rewards: []         // { id, date: 'YYYY-MM-DD', cro, note }
 };
 
 const LS_TX = "cro_calc_txs";
 const LS_APY = "cro_calc_apy";
+const LS_RW = "cro_calc_rewards";
 
 const $ = (id) => document.getElementById(id);
 
@@ -357,6 +391,7 @@ async function refreshPrices() {
     renderPrices();
     renderPortfolio();
     renderTxs();
+    renderRewards();
     // recalcular simuladores si ya tenían resultados
     if ($("simResult").innerHTML) runSimulator();
     if ($("liveResult").innerHTML) runLiveCalc();
@@ -460,6 +495,70 @@ function renderTxs() {
   );
 }
 
+/* ─────────────────── Recompensas reales ─────────────────── */
+function loadRewards() {
+  try { state.rewards = JSON.parse(localStorage.getItem(LS_RW)) || []; }
+  catch { state.rewards = []; }
+}
+function saveRewards() {
+  localStorage.setItem(LS_RW, JSON.stringify(state.rewards));
+}
+function realRewardsCro() {
+  return state.rewards.reduce((s, r) => s + (r.cro || 0), 0);
+}
+
+function addReward() {
+  const date = $("rwDate").value || new Date().toISOString().slice(0, 10);
+  const cro = parseFloat($("rwCro").value);
+  const note = $("rwNote").value.trim();
+  if (!isFinite(cro) || cro <= 0) { alert("Ingresa la recompensa en CRO."); return; }
+  state.rewards.push({ id: Date.now(), date, cro, note });
+  state.rewards.sort((a, b) => a.date.localeCompare(b.date));
+  saveRewards();
+  $("rwCro").value = ""; $("rwNote").value = "";
+  renderRewards();
+  renderPortfolio();
+}
+
+function deleteReward(id) {
+  state.rewards = state.rewards.filter(r => r.id !== id);
+  saveRewards();
+  renderRewards();
+  renderPortfolio();
+}
+
+function renderRewards() {
+  const tbl = $("rwTable"), body = $("rwBody"), foot = $("rwFoot");
+  if (!state.rewards.length) { tbl.style.display = "none"; return; }
+  tbl.style.display = "";
+  body.innerHTML = "";
+  for (const r of state.rewards) {
+    const valUsd = state.croUsd ? r.cro * state.croUsd : null;
+    const valMxn = state.croMxn ? r.cro * state.croMxn : null;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${r.date}</td>
+      <td>${r.note || "—"}</td>
+      <td class="cro">${fmtCro(r.cro)}</td>
+      <td>${fmtUsd(valUsd)}</td>
+      <td class="mxn">${fmtMxn(valMxn)}</td>
+      <td><button class="danger" data-delrw="${r.id}">✕</button></td>`;
+    body.appendChild(tr);
+  }
+  const tot = realRewardsCro();
+  foot.innerHTML = `<tr>
+    <td><b>Total</b></td><td></td>
+    <td class="cro"><b>${fmtCro(tot)}</b></td>
+    <td><b>${fmtUsd(state.croUsd ? tot * state.croUsd : null)}</b></td>
+    <td class="mxn"><b>${fmtMxn(state.croMxn ? tot * state.croMxn : null)}</b></td>
+    <td></td></tr>`;
+  body.querySelectorAll("[data-delrw]").forEach(b =>
+    b.addEventListener("click", () => {
+      if (confirm("¿Eliminar esta recompensa?")) deleteReward(Number(b.dataset.delrw));
+    })
+  );
+}
+
 /* ─────────────────── Portafolio ─────────────────── */
 function renderPortfolio() {
   const wrap = $("portfolioStats");
@@ -467,10 +566,13 @@ function renderPortfolio() {
   const totalUsd = state.txs.reduce((s, t) => s + (t.usd || 0), 0);
   const croWithCost = state.txs.reduce((s, t) => s + (t.usd != null ? t.cro : 0), 0);
 
-  // recompensas acumuladas estimadas (simple, desde la fecha de cada depósito)
+  // recompensas: usa las REALES registradas si existen; si no, estima desde cada depósito
   const dailyRate = apy() / 365;
-  const accruedCro = state.txs.reduce((s, t) => s + t.cro * dailyRate * daysSince(t.date), 0);
-  const balCro = totalCro + accruedCro;
+  const estCro = state.txs.reduce((s, t) => s + t.cro * dailyRate * daysSince(t.date), 0);
+  const realCro = realRewardsCro();
+  const usingReal = realCro > 0;
+  const rewardCro = usingReal ? realCro : estCro;
+  const balCro = totalCro + rewardCro;
 
   const valUsd = state.croUsd ? balCro * state.croUsd : null;
   const valMxn = state.croMxn ? balCro * state.croMxn : null;
@@ -483,12 +585,18 @@ function renderPortfolio() {
     return;
   }
 
+  const rewardLabel = usingReal ? "Recompensas reales recibidas" : "Recompensas acumuladas (est.)";
+  const rewardSub = usingReal
+    ? (state.croUsd ? "≈ " + fmtUsd(rewardCro * state.croUsd) + " · registradas" : "registradas")
+    : (state.croUsd ? "≈ " + fmtUsd(rewardCro * state.croUsd) + " · estimación" : "estimación");
+  const balLabel = usingReal ? "Balance total (real)" : "Balance total estimado";
+
   wrap.innerHTML = `
     <div class="stat"><div class="label">CRO en staking</div><div class="value">${fmtCro(totalCro)}</div>
       <div class="sub">${totalUsd > 0 ? "invertido: " + fmtUsd(totalUsd) : "costo no registrado"}</div></div>
-    <div class="stat"><div class="label">Recompensas acumuladas (est.)</div><div class="value">+${fmtCro(accruedCro)}</div>
-      <div class="sub">${state.croUsd ? "≈ " + fmtUsd(accruedCro * state.croUsd) : ""}</div></div>
-    <div class="stat"><div class="label">Balance total estimado</div><div class="value">${fmtCro(balCro)}</div>
+    <div class="stat"><div class="label">${rewardLabel}</div><div class="value">+${fmtCro(rewardCro)}</div>
+      <div class="sub">${rewardSub}</div></div>
+    <div class="stat"><div class="label">${balLabel}</div><div class="value">${fmtCro(balCro)}</div>
       <div class="sub">costo promedio: ${avgCost ? "$" + fmtPx(avgCost) : "—"}</div></div>
     <div class="stat"><div class="label">Valor hoy</div><div class="value">${fmtUsd(valUsd)}</div>
       <div class="sub">${fmtMxn(valMxn)}</div></div>`;
@@ -641,7 +749,9 @@ function exportCsv() {
 }
 
 function exportJson() {
-  download("cro_calc_respaldo.json", JSON.stringify({ apy: $("apy").value, txs: state.txs }, null, 2), "application/json");
+  download("cro_calc_respaldo.json",
+    JSON.stringify({ apy: $("apy").value, txs: state.txs, rewards: state.rewards }, null, 2),
+    "application/json");
 }
 
 function importJson(file) {
@@ -651,11 +761,16 @@ function importJson(file) {
       const j = JSON.parse(reader.result);
       if (!Array.isArray(j.txs)) throw new Error("formato inválido");
       state.txs = j.txs.filter(t => t.date && isFinite(t.cro) && t.cro > 0);
+      state.rewards = Array.isArray(j.rewards)
+        ? j.rewards.filter(r => r.date && isFinite(r.cro) && r.cro > 0)
+        : [];
       if (j.apy) { $("apy").value = j.apy; localStorage.setItem(LS_APY, j.apy); }
       saveTxs();
+      saveRewards();
       renderTxs();
+      renderRewards();
       renderPortfolio();
-      alert("Respaldo importado: " + state.txs.length + " transacciones.");
+      alert("Respaldo importado: " + state.txs.length + " depósitos y " + state.rewards.length + " recompensas.");
     } catch (e) {
       alert("No se pudo importar: " + e.message);
     }
@@ -666,9 +781,12 @@ function importJson(file) {
 /* ─────────────────── Init ─────────────────── */
 function init() {
   loadTxs();
+  loadRewards();
   const savedApy = localStorage.getItem(LS_APY);
   if (savedApy) $("apy").value = savedApy;
-  $("txDate").value = new Date().toISOString().slice(0, 10);
+  const today = new Date().toISOString().slice(0, 10);
+  $("txDate").value = today;
+  $("rwDate").value = today;
 
   $("btnRefresh").addEventListener("click", refreshPrices);
   $("btnSim").addEventListener("click", runSimulator);
@@ -676,6 +794,7 @@ function init() {
   $("btnLive").addEventListener("click", runLiveCalc);
   $("liveAmount").addEventListener("keydown", e => { if (e.key === "Enter") runLiveCalc(); });
   $("btnAddTx").addEventListener("click", addTx);
+  $("btnAddRw").addEventListener("click", addReward);
   $("btnEff").addEventListener("click", runEffCalc);
   $("btnExport").addEventListener("click", exportCsv);
   $("btnExportJson").addEventListener("click", exportJson);
@@ -692,6 +811,7 @@ function init() {
   });
 
   renderTxs();
+  renderRewards();
   renderPortfolio();
   refreshPrices();
   setInterval(refreshPrices, 60000); // actualización automática cada 60 s
